@@ -1,0 +1,99 @@
+import pymunk
+import pygame
+import math
+
+# --- CLASE ENCAPSULADA ---
+class PenduloAmortiguado(pymunk.PinJoint):
+    """
+    Simula un péndulo físico con rozamiento viscoso (damping) autónomo.
+    Hereda de PinJoint para actuar como la restricción (hilo) entre dos cuerpos.
+    """
+    def __init__(self, a, b, anchor_a, anchor_b, coeficiente_friccion):
+        super().__init__(a, b, anchor_a, anchor_b)
+        self.b_friction = coeficiente_friccion
+        
+        # Guardamos la función original de velocidad del cuerpo colgado
+        self._original_velocity_func = b.velocity_func
+        # Y la sustituimos por la nuestra
+        b.velocity_func = self._custom_velocity_func
+
+    def _custom_velocity_func(self, body, gravity, damping, dt):
+        """Calcula la fuerza internamente en cada paso de Pymunk"""
+    
+        # F = -b * v
+        f_amortiguacion = -self.b_friction * body.velocity
+        body.apply_force_at_world_point(f_amortiguacion, body.position)
+        
+        # Ejecutamos la física estándar de Pymunk (gravedad, etc)
+        self._original_velocity_func(body, gravity, damping, dt)
+
+
+def run_simulation():
+    pygame.init()
+    width, height = 800, 600
+    screen = pygame.display.set_mode((width, height)) 
+    pygame.display.set_caption("Simulación de un péndulo amortiguado autónomo")
+    clock = pygame.time.Clock()
+
+    space = pymunk.Space()
+    space.gravity = (0, 900)
+    
+    ceiling_pos = (400, 100)
+
+    # --- CONFIGURACIÓN DEL PÉNDULO ---
+    mass = 1.0
+    radius = 40
+    moment = pymunk.moment_for_circle(mass, 0, radius)
+    body = pymunk.Body(mass, moment)
+    
+    longitud_hilo = 350
+    angulo_inicial = math.radians(70)
+    
+    body.position = (
+        ceiling_pos[0] + longitud_hilo * math.sin(angulo_inicial),
+        ceiling_pos[1] + longitud_hilo * math.cos(angulo_inicial)
+    )
+    
+    shape = pymunk.Circle(body, radius)
+    space.add(body, shape)
+
+    # --- USAMOS NUESTRA CLASE ---
+    b = 0.3  # Coeficiente de amortiguamiento
+    # Al crearlo, ya se encarga él solo de aplicarse el rozamiento
+    mi_pendulo = PenduloAmortiguado(space.static_body, body, ceiling_pos, (0, 0), b)
+    space.add(mi_pendulo)
+
+    running = True
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: running = False
+
+        """No necesitamos aplicar la fuerza de amortiguación manualmente,
+        ya que nuestra clase PenduloAmortiguado es autonoma y se encarga de ello."""
+        # APLICAR AMORTIGUACIÓN MANUAL (F = -b * v)
+        #v = body.velocity
+        #f_amortiguacion = -b * v
+        #body.apply_force_at_world_point(f_amortiguacion, body.position)
+
+        space.step(1.0 / 60.0)
+        
+        screen.fill((255, 255, 255))
+
+        # Dibujar Soporte
+        pygame.draw.line(screen, (0, 0, 0), (350, 100), (450, 100), 5)
+        
+        # Dibujar Hilo
+        pos = (int(body.position.x), int(body.position.y))
+        pygame.draw.line(screen, (150, 150, 150), ceiling_pos, pos, 2)
+
+        # Dibujar Esfera
+        pygame.draw.circle(screen, (50, 100, 255), pos, radius)
+        pygame.draw.circle(screen, (0, 0, 0), pos, radius, 2)
+
+        pygame.display.flip()
+        clock.tick(60)
+
+    pygame.quit()
+
+if __name__ == "__main__":
+    run_simulation()
